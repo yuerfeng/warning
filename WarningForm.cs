@@ -13,7 +13,6 @@ namespace WarningApp
         private int totalSeconds;
         private System.Windows.Forms.Timer countdownTimer = null!;
         private MainForm mainForm = null!;
-        private PictureBox mainPictureBox = null!;
         
         private string imagePath = Path.Combine(Application.StartupPath, "main.png");
         
@@ -24,8 +23,7 @@ namespace WarningApp
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
         private IntPtr hookId = IntPtr.Zero;
         
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
         
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -51,12 +49,16 @@ namespace WarningApp
             this.mainForm = mainForm;
             this.totalSeconds = restMinutes * 60;
             this.restSeconds = this.totalSeconds;
-            InitializeTimer();
-            InitializeMainPicture();
+            this.DoubleBuffered = true;
+            if (Screen.PrimaryScreen != null)
+            {
+                this.Bounds = Screen.PrimaryScreen.Bounds;
+            }
+            LoadBackgroundImage();
             UpdateProgressBar();
+            InitializeTimer();
             BlockInput(true);
             
-            // 设置全局键盘钩子
             _proc = KeyboardHookCallback;
             hookId = SetHook(_proc);
         }
@@ -69,23 +71,14 @@ namespace WarningApp
             countdownTimer.Start();
         }
         
-        private void InitializeMainPicture()
+        private void LoadBackgroundImage()
         {
-            // 创建并配置PictureBox
-            mainPictureBox = new PictureBox();
-            mainPictureBox.Dock = DockStyle.Fill;
-            mainPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
-            
-            // 设置图片为背景，让文字显示在图片上方
-            this.Controls.Add(mainPictureBox);
-            this.Controls.SetChildIndex(mainPictureBox, this.Controls.Count - 1);
-            
-            // 加载图片
             if (File.Exists(imagePath))
             {
                 try
                 {
-                    mainPictureBox.Image = Image.FromFile(imagePath);
+                    this.BackgroundImage = Image.FromFile(imagePath);
+                    this.BackgroundImageLayout = ImageLayout.Stretch;
                 }
                 catch (Exception ex)
                 {
@@ -163,22 +156,9 @@ namespace WarningApp
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            this.titleLabel = new System.Windows.Forms.Label();
-            this.progressBar = new System.Windows.Forms.ProgressBar();
-            this.timeLabel = new System.Windows.Forms.Label();
+            this.progressBar = new TransparentProgressBar();
+            this.timeLabel = new TransparentLabel();
             this.SuspendLayout();
-            // 
-            // titleLabel
-            // 
-            this.titleLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this.titleLabel.Font = new System.Drawing.Font("微软雅黑", 72F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.titleLabel.ForeColor = System.Drawing.Color.Red;
-            this.titleLabel.Location = new System.Drawing.Point(0, 0);
-            this.titleLabel.Name = "titleLabel";
-            this.titleLabel.Size = new System.Drawing.Size(800, 200);
-            this.titleLabel.TabIndex = 0;
-            this.titleLabel.Text = "注意休息";
-            this.titleLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             // 
             // progressBar
             // 
@@ -190,8 +170,10 @@ namespace WarningApp
             // 
             // timeLabel
             // 
+            this.timeLabel.BackColor = System.Drawing.Color.Transparent;
             this.timeLabel.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.timeLabel.Font = new System.Drawing.Font("微软雅黑", 24F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.timeLabel.ForeColor = System.Drawing.Color.White;
             this.timeLabel.Location = new System.Drawing.Point(0, 350);
             this.timeLabel.Name = "timeLabel";
             this.timeLabel.Size = new System.Drawing.Size(800, 80);
@@ -203,12 +185,10 @@ namespace WarningApp
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.BackColor = System.Drawing.Color.LightYellow;
             this.ClientSize = new System.Drawing.Size(800, 450);
             this.ControlBox = false;
             this.Controls.Add(this.timeLabel);
             this.Controls.Add(this.progressBar);
-            this.Controls.Add(this.titleLabel);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -218,20 +198,160 @@ namespace WarningApp
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "WarningForm";
             this.TopMost = true;
-            this.Load += new System.EventHandler(this.WarningForm_Load);
             this.ResumeLayout(false);
         }
 
-        private void WarningForm_Load(object? sender, EventArgs e)
+        private TransparentProgressBar progressBar = null!;
+        private TransparentLabel timeLabel = null!;
+
+        private class TransparentProgressBar : Control
         {
-            if (Screen.PrimaryScreen != null)
+            private int _value;
+            private int _maximum = 100;
+
+            public int Value
             {
-                this.Bounds = Screen.PrimaryScreen.Bounds;
+                get => _value;
+                set { _value = Math.Clamp(value, 0, _maximum); Invalidate(); }
+            }
+
+            public TransparentProgressBar()
+            {
+                this.SetStyle(
+                    ControlStyles.SupportsTransparentBackColor |
+                    ControlStyles.UserPaint |
+                    ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.OptimizedDoubleBuffer,
+                    true);
+                this.BackColor = Color.Transparent;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+                if (_maximum == 0) return;
+                int fillWidth = (int)(Width * ((double)_value / _maximum));
+                using (var brush = new SolidBrush(Color.FromArgb(160, Color.White)))
+                {
+                    e.Graphics.FillRectangle(brush, 0, 0, fillWidth, Height);
+                }
+                using (var pen = new Pen(Color.FromArgb(100, Color.White), 1))
+                {
+                    e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+                }
+            }
+
+            protected override void OnPaintBackground(PaintEventArgs e)
+            {
+                if (Parent?.BackgroundImage != null)
+                {
+                    var img = Parent.BackgroundImage;
+                    var parentSize = Parent.ClientSize;
+                    var scaleX = (float)img.Width / parentSize.Width;
+                    var scaleY = (float)img.Height / parentSize.Height;
+                    var srcRect = new RectangleF(
+                        Location.X * scaleX,
+                        Location.Y * scaleY,
+                        Width * scaleX,
+                        Height * scaleY);
+                    e.Graphics.DrawImage(img, ClientRectangle, srcRect, GraphicsUnit.Pixel);
+                }
             }
         }
 
-        private Label titleLabel = null!;
-        private ProgressBar progressBar = null!;
-        private Label timeLabel = null!;
+        private class TransparentLabel : Control
+        {
+            private ContentAlignment _textAlign = ContentAlignment.MiddleCenter;
+            private string? _text;
+
+            public ContentAlignment TextAlign
+            {
+                get => _textAlign;
+                set { _textAlign = value; Invalidate(); }
+            }
+
+            public override string Text
+            {
+                get => _text ?? string.Empty;
+                set { _text = value ?? string.Empty; Invalidate(); }
+            }
+
+            public TransparentLabel()
+            {
+                this.SetStyle(
+                    ControlStyles.SupportsTransparentBackColor |
+                    ControlStyles.UserPaint |
+                    ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.OptimizedDoubleBuffer,
+                    true);
+                this.BackColor = Color.Transparent;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                base.OnPaint(e);
+                var format = new StringFormat();
+                switch (_textAlign)
+                {
+                    case ContentAlignment.MiddleCenter:
+                        format.Alignment = StringAlignment.Center;
+                        format.LineAlignment = StringAlignment.Center;
+                        break;
+                    case ContentAlignment.TopLeft:
+                        format.Alignment = StringAlignment.Near;
+                        format.LineAlignment = StringAlignment.Near;
+                        break;
+                    case ContentAlignment.TopCenter:
+                        format.Alignment = StringAlignment.Center;
+                        format.LineAlignment = StringAlignment.Near;
+                        break;
+                    case ContentAlignment.TopRight:
+                        format.Alignment = StringAlignment.Far;
+                        format.LineAlignment = StringAlignment.Near;
+                        break;
+                    case ContentAlignment.MiddleLeft:
+                        format.Alignment = StringAlignment.Near;
+                        format.LineAlignment = StringAlignment.Center;
+                        break;
+                    case ContentAlignment.MiddleRight:
+                        format.Alignment = StringAlignment.Far;
+                        format.LineAlignment = StringAlignment.Center;
+                        break;
+                    case ContentAlignment.BottomLeft:
+                        format.Alignment = StringAlignment.Near;
+                        format.LineAlignment = StringAlignment.Far;
+                        break;
+                    case ContentAlignment.BottomCenter:
+                        format.Alignment = StringAlignment.Center;
+                        format.LineAlignment = StringAlignment.Far;
+                        break;
+                    case ContentAlignment.BottomRight:
+                        format.Alignment = StringAlignment.Far;
+                        format.LineAlignment = StringAlignment.Far;
+                        break;
+                }
+                using (var brush = new SolidBrush(this.ForeColor))
+                {
+                    e.Graphics.DrawString(this.Text, this.Font, brush, this.ClientRectangle, format);
+                }
+            }
+
+            protected override void OnPaintBackground(PaintEventArgs e)
+            {
+                if (Parent?.BackgroundImage != null)
+                {
+                    var img = Parent.BackgroundImage;
+                    var parentSize = Parent.ClientSize;
+                    var scaleX = (float)img.Width / parentSize.Width;
+                    var scaleY = (float)img.Height / parentSize.Height;
+                    var srcRect = new RectangleF(
+                        Location.X * scaleX,
+                        Location.Y * scaleY,
+                        Width * scaleX,
+                        Height * scaleY);
+                    e.Graphics.DrawImage(img, ClientRectangle, srcRect, GraphicsUnit.Pixel);
+                }
+            }
+        }
     }
 }
