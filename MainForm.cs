@@ -21,7 +21,7 @@ namespace WarningApp
         private string imagePath = Path.Combine(Application.StartupPath, "main.png");
         
         public int IntervalMinutes { get; set; } = 45;
-        public int RestMinutes { get; set; } = 2;
+        public int RestSeconds { get; set; } = 120;
         
         // INI文件操作API
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
@@ -145,13 +145,31 @@ namespace WarningApp
 
         private void WarningTimer_Tick(object? sender, EventArgs e)
         {
-            // 每次都创建新的警告窗口，确保倒计时从0开始
+            // 每次都在所有显示器上创建新的警告窗口，确保倒计时从0开始
             if (warningForm != null && !warningForm.IsDisposed)
             {
                 warningForm.Dispose();
             }
-            warningForm = new WarningForm(RestMinutes, this);
-            warningForm.ShowDialog();
+
+            WarningForm? primaryForm = null;
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                var form = new WarningForm(RestSeconds, this, screen.Bounds);
+                if (screen.Primary)
+                {
+                    primaryForm = form;
+                }
+                else
+                {
+                    form.Show();
+                }
+            }
+
+            if (primaryForm != null)
+            {
+                warningForm = primaryForm;
+                warningForm.ShowDialog();
+            }
         }
 
         public void ResetTimer()
@@ -174,11 +192,19 @@ namespace WarningApp
                     IntervalMinutes = interval;
                 }
                 
-                // 加载休息时长
-                GetPrivateProfileString("Settings", "RestMinutes", "2", sb, sb.Capacity, iniFilePath);
-                if (int.TryParse(sb.ToString(), out int rest))
+                // 加载休息时长（单位：秒），兼容旧版以分钟存储的 RestMinutes
+                GetPrivateProfileString("Settings", "RestSeconds", "", sb, sb.Capacity, iniFilePath);
+                if (int.TryParse(sb.ToString(), out int restSeconds))
                 {
-                    RestMinutes = rest;
+                    RestSeconds = restSeconds;
+                }
+                else
+                {
+                    GetPrivateProfileString("Settings", "RestMinutes", "", sb, sb.Capacity, iniFilePath);
+                    if (int.TryParse(sb.ToString(), out int restMinutes))
+                    {
+                        RestSeconds = restMinutes * 60;
+                    }
                 }
             }
         }
@@ -186,7 +212,7 @@ namespace WarningApp
         public void SaveSettings()
         {
             WritePrivateProfileString("Settings", "IntervalMinutes", IntervalMinutes.ToString(), iniFilePath);
-            WritePrivateProfileString("Settings", "RestMinutes", RestMinutes.ToString(), iniFilePath);
+            WritePrivateProfileString("Settings", "RestSeconds", RestSeconds.ToString(), iniFilePath);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

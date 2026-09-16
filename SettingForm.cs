@@ -12,13 +12,13 @@ namespace WarningApp
             InitializeComponent();
             this.mainForm = mainForm;
             this.intervalNumericUpDown.Value = mainForm.IntervalMinutes;
-            this.restNumericUpDown.Value = mainForm.RestMinutes;
+            this.restNumericUpDown.Value = Math.Clamp(mainForm.RestSeconds, (int)this.restNumericUpDown.Minimum, (int)this.restNumericUpDown.Maximum);
         }
 
         private void saveButton_Click(object? sender, EventArgs e)
         {
             mainForm.IntervalMinutes = (int)intervalNumericUpDown.Value;
-            mainForm.RestMinutes = (int)restNumericUpDown.Value;
+            mainForm.RestSeconds = (int)restNumericUpDown.Value;
             mainForm.SaveSettings();
             mainForm.ResetTimer();
             this.Close();
@@ -79,11 +79,12 @@ namespace WarningApp
             // restNumericUpDown
             // 
             this.restNumericUpDown.Location = new System.Drawing.Point(83, 54);
+            this.restNumericUpDown.Maximum = new decimal(new int[] { 3600, 0, 0, 0 });
             this.restNumericUpDown.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
             this.restNumericUpDown.Name = "restNumericUpDown";
             this.restNumericUpDown.Size = new System.Drawing.Size(65, 25);
             this.restNumericUpDown.TabIndex = 3;
-            this.restNumericUpDown.Value = new decimal(new int[] { 5, 0, 0, 0 });
+            this.restNumericUpDown.Value = new decimal(new int[] { 120, 0, 0, 0 });
             // 
             // saveButton
             // 
@@ -111,7 +112,7 @@ namespace WarningApp
             this.label4.Name = "label4";
             this.label4.Size = new System.Drawing.Size(23, 15);
             this.label4.TabIndex = 6;
-            this.label4.Text = "分钟";
+            this.label4.Text = "秒";
             // 
             // SettingForm
             // 
