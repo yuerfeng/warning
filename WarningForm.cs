@@ -135,6 +135,16 @@ namespace WarningApp
 
         private System.ComponentModel.IContainer? components;
 
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            // 关键：窗口一经关闭必须立即注销全局钩子。
+            // 主显示器窗口以 ShowDialog() 显示，模态窗口 Close() 后不会自动 Dispose()，
+            // 若仅在 Dispose 中注销，关闭后钩子会一直拦截全部键盘/鼠标输入，导致系统无法操作
+            countdownTimer?.Stop();
+            InputBlocker.Unregister(this);
+            base.OnFormClosed(e);
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -142,7 +152,8 @@ namespace WarningApp
                 components.Dispose();
             }
             countdownTimer?.Dispose();
-            // 注销后若所有提醒窗口都已关闭，将自动卸载全局钩子
+            // 兜底：未经过 FormClosed 直接被 Dispose 时同样注销；
+            // 所有提醒窗口都注销后将自动卸载全局钩子
             InputBlocker.Unregister(this);
             base.Dispose(disposing);
         }
@@ -323,7 +334,8 @@ namespace WarningApp
                 var data = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
                 foreach (WarningForm form in activeForms)
                 {
-                    if (form.IsDisposed || !form.IsHandleCreated)
+                    // 已释放、句柄已销毁或不可见的窗口不再参与点击放行判断
+                    if (form.IsDisposed || !form.IsHandleCreated || !form.Visible)
                     {
                         continue;
                     }

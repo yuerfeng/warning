@@ -168,7 +168,14 @@ namespace WarningApp
             if (primaryForm != null)
             {
                 warningForm = primaryForm;
-                warningForm.ShowDialog();
+                primaryForm.ShowDialog();
+                // 模态窗口 Close 后不会自动释放，立即 Dispose 以回收计时器/背景图等资源，
+                // 并确保全局输入钩子已在窗口关闭时完成注销
+                primaryForm.Dispose();
+                if (warningForm == primaryForm)
+                {
+                    warningForm = null;
+                }
             }
         }
 
